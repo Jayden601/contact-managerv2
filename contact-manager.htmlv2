@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Contact Manager</title>
+  <style>
+    body { font-family: Arial; background: #f7f7f7; padding: 20px; }
+    .form, .search { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; }
+    input, select, button { margin: 8px 0; padding: 8px; width: 100%; }
+    .contact { background: #fff; margin-bottom: 10px; padding: 10px; border-radius: 8px; display: flex; align-items: center; gap: 15px; cursor: move; }
+    .contact img { width: 50px; height: 50px; object-fit: cover; border-radius: 50%; }
+    .contact-info { flex-grow: 1; }
+    .actions button { margin-right: 5px; }
+    .status { font-weight: bold; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+    .status-NEEDTOCALL { background: #dab3ff; color: #333; }
+    .status-CASHBUYER { background: #a8e6a3; color: #333; }
+    .status-NOGO { background: #ff9999; color: #fff; }
+    .status-POSSIBLECB { background: #ffcc80; color: #333; }
+    .status-FORWARDCB { background: #ffff99; color: #333; }
+  </style>
+</head>
+<body>
+
+<h2>Contact Manager</h2>
+
+<div class="form">
+  <input type="text" id="name" placeholder="Name">
+  <input type="text" id="phone" placeholder="Phone">
+  <input type="email" id="email" placeholder="Email">
+  <input type="text" id="location" placeholder="Location">
+  <input type="text" id="team" placeholder="Independent or Team?">
+  <input type="url" id="googleDoc" placeholder="Google Doc URL">
+  <input type="file" id="profilePicInput" accept="image/*">
+  <select id="status">
+    <option value="NEEDTOCALL">Need to Call</option>
+    <option value="CASHBUYER">Cash Buyer</option>
+    <option value="NOGO">No Go</option>
+    <option value="POSSIBLECB">Possible CB</option>
+    <option value="FORWARDCB">Forward CB</option>
+  </select>
+  <button onclick="addOrUpdate()">Save Contact</button>
+</div>
+
+<div class="search">
+  <input type="text" id="search" placeholder="Search contacts..." oninput="renderContacts()">
+</div>
+
+<div id="contactList" ondragover="event.preventDefault()"></div>
+
+<script>
+  let contacts = JSON.parse(localStorage.getItem('contacts')) || [];
+  let editingEmail = null;
+  let profilePicData = "";
+
+  document.getElementById('profilePicInput').addEventListener('change', (event) => {
+    const reader = new FileReader();
+    reader.onload = () => profilePicData = reader.result;
+    reader.readAsDataURL(event.target.files[0]);
+  });
+
+  function addOrUpdate() {
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const location = document.getElementById('location').value.trim();
+    const team = document.getElementById('team').value.trim();
+    const googleDoc = document.getElementById('googleDoc').value.trim();
+    const status = document.getElementById('status').value;
+
+    if (!name || !email) {
+      alert("Name and Email are required.");
+      return;
+    }
+
+    const newContact = { name, phone, email, location, team, googleDoc, status, profilePic: profilePicData || "" };
+
+    if (editingEmail) {
+      contacts = contacts.map(c => c.email === editingEmail ? newContact : c);
+      editingEmail = null;
+    } else {
+      if (contacts.some(c => c.email === email)) {
+        alert("Contact already exists.");
+        return;
+      }
+      contacts.push(newContact);
+    }
+
+    localStorage.setItem('contacts', JSON.stringify(contacts));
+    clearForm();
+    renderContacts();
+  }
+
+  function clearForm() {
+    ['name', 'phone', 'email', 'location', 'team', 'googleDoc', 'status'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('profilePicInput').value = '';
+    profilePicData = "";
+    editingEmail = null;
+  }
+
+  function renderContacts() {
+    const query = document.getElementById('search').value.toLowerCase();
+    const list = document.getElementById('contactList');
+    list.innerHTML = '';
+    contacts
+      .filter(c => c.name.toLowerCase().includes(query) || c.email.toLowerCase().includes(query))
+      .forEach(contact => {
+        const div = document.createElement('div');
+        div.className = 'contact status-' + contact.status;
+        div.draggable = true;
+
+        div.ondragstart = e => e.dataTransfer.setData("email", contact.email);
+        div.ondrop = e => {
+          const draggedEmail = e.dataTransfer.getData("email");
+          const fromIndex = contacts.findIndex(c => c.email === draggedEmail);
+          const toIndex = contacts.findIndex(c => c.email === contact.email);
+          const moved = contacts.splice(fromIndex, 1)[0];
+          contacts.splice(toIndex, 0, moved);
+          localStorage.setItem('contacts', JSON.stringify(contacts));
+          renderContacts();
+        };
+
+        div.innerHTML = `
+          <img src="${contact.profilePic || 'https://via.placeholder.com/50'}">
+          <div class="contact-info">
+            <strong>${contact.name}</strong><br>
+            ${contact.phone}<br>
+            ${contact.email}<br>
+            ${contact.location}<br>
+            ${contact.team}<br>
+            <span class="status status-${contact.status}">${contact.status.replace(/([A-Z])/g, ' $1')}</span><br>
+            <a href="${contact.googleDoc}" target="_blank">View Google Doc</a>
+          </div>
+          <div class="actions">
+            <button onclick="edit('${contact.email}')">Edit</button>
+            <button onclick="remove('${contact.email}')">Delete</button>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+  }
+
+  function edit(email) {
+    const c = contacts.find(c => c.email === email);
+    if (!c) return;
+    editingEmail = email;
+    document.getElementById('name').value = c.name;
+    document.getElementById('phone').value = c.phone;
+    document.getEleme
